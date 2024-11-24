@@ -1,27 +1,27 @@
-public class User {
+public class kullaniciGirisi {
     public static void main(String[] args) {
-        private String userID;
-        private String password;
-        private String name;
+        private String kullaniciID;
+        private String sifre;
+        private String isim;
         private String role;
 
-    public User(String userID, String password, String name, String role) {
-            this.userID = userID;
-            this.password = password;
-            this.name = name;
+    public User(String kullaniciID, String password, String name, String role) {
+            this.kullaniciID = kullaniciID;
+            this.sifre = sifre;
+            this.isim = isim;
             this.role = role;
         }
 
-        public String getUserID () {
-            return userID;
+        public String getkulllaniciID () {
+            return kullaniciID;
         }
 
-        public String getPassword () {
-            return password;
+        public String getsifre () {
+            return sifre;
         }
 
-        public String getName () {
-            return name;
+        public String getisim () {
+            return isim;
         }
 
         public String getRole () {
@@ -30,7 +30,7 @@ public class User {
 
         @Override
         public String toString () {
-            return name + " (" + role + ")";
+            return isim + " (" + role + ")";
         }
     }
 }
