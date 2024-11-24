@@ -28,7 +28,6 @@ public class kullaniciGirisi {
             return role;
         }
 
-        @Override
         public String toString () {
             return isim + " (" + role + ")";
         }
