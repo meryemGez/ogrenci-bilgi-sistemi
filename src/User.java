@@ -12,7 +12,7 @@ public class kullaniciGirisi {
             this.role = role;
         }
 
-        public String getkulllaniciID () {
+        public String getkullaniciID () {
             return kullaniciID;
         }
 
