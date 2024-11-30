@@ -1,0 +1,134 @@
+import java.util.ArrayList;
+import java.util.InputMismatchException;
+import java.util.List;
+import java.util.Scanner;
+
+public class Main {
+    // Öğrenci bilgilerini saklamak için bir liste
+    private static List<String> ogrenciListesi = new ArrayList<>();
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        ogretmenIslemleri(scanner);
+        scanner.close();
+    }
+
+    public static void ogretmenIslemleri(Scanner scanner) {
+        System.out.println("Öğretmen menüsüne hoş geldiniz! Burada ders programınızı görüntüleyebilir, öğrenci notlarını girebilir ve öğrenci listesi oluşturabilirsiniz.");
+        boolean devam = true;
+
+        while (devam) {
+            System.out.println("\nLütfen bir işlem seçin:");
+            System.out.println("1. Ders Ekle");
+            System.out.println("2. Not Gir");
+            System.out.println("3. Öğrenci Ekle");
+            System.out.println("4. Öğrenci Listele");
+            System.out.println("0. Çıkış");
+            System.out.print("Seçiminiz: ");
+
+            int secim = alinanSecim(scanner);
+
+            switch (secim) {
+                case 1:
+                    dersEkle(scanner);
+                    break;
+                case 2:
+                    notGir(scanner);
+                    break;
+                case 3:
+                    ogrenciEkle(scanner);
+                    break;
+                case 4:
+                    ogrenciListele();
+                    break;
+                case 0:
+                    devam = false;
+                    System.out.println("Çıkış yapılıyor...");
+                    break;
+                default:
+                    System.out.println("Geçersiz seçim! Lütfen tekrar deneyin.");
+                    break;
+            }
+            break;
+        }
+    }
+
+    public static void dersEkle(Scanner scanner) {
+        System.out.println("\nDers Ekleme Menüsü:");
+        scanner.nextLine(); // Önceki girdiden kalan satır sonu karakterini temizlemek için
+        System.out.print("Ders ID: ");
+        String dersID = scanner.nextLine();
+        System.out.print("Ders Adı: ");
+        String dersAdi = scanner.nextLine();
+        System.out.print("Öğretmen ID: ");
+        String ogretmenID = scanner.nextLine();
+
+        System.out.println("\nDers başarıyla eklendi! Detaylar:");
+        System.out.println("Ders ID: " + dersID);
+        System.out.println("Ders Adı: " + dersAdi);
+        System.out.println("Öğretmen ID: " + ogretmenID);
+    }
+
+    public static void notGir(Scanner scanner) {
+        System.out.println("\nNot Girme Menüsü:");
+        scanner.nextLine(); // Önceki girdiden kalan satır sonu karakterini temizlemek için
+        System.out.print("Öğrenci ID: ");
+        String ogrenciID = scanner.nextLine();
+        System.out.print("Ders ID: ");
+        String dersID = scanner.nextLine();
+
+        double notDegeri = alinanNot(scanner);
+
+        System.out.println("\nNot başarıyla eklendi! Detaylar:");
+        System.out.println("Öğrenci ID: " + ogrenciID);
+        System.out.println("Ders ID: " + dersID);
+        System.out.println("Not: " + notDegeri);
+    }
+
+    public static void ogrenciEkle(Scanner scanner) {
+        System.out.println("\nÖğrenci Ekleme Menüsü:");
+        scanner.nextLine(); // Önceki girdiden kalan satır sonu karakterini temizle
+        System.out.print("Öğrenci Adı ve Soyadı: ");
+        String ogrenciAdi = scanner.nextLine();
+
+        // Öğrenci listeye ekleniyor
+        ogrenciListesi.add(ogrenciAdi);
+
+        System.out.println("\nÖğrenci başarıyla eklendi: " + ogrenciAdi);
+    }
+
+    public static void ogrenciListele() {
+        System.out.println("\nÖğrenci Listesi:");
+
+        if (ogrenciListesi.isEmpty()) {
+            System.out.println("Henüz eklenmiş öğrenci yok.");
+        } else {
+            for (int i = 0; i < ogrenciListesi.size(); i++) {
+                System.out.println((i + 1) + ". " + ogrenciListesi.get(i));
+            }
+        }
+    }
+
+    public static int alinanSecim(Scanner scanner) {
+        while (true) {
+            try {                                                   // bu kısımı copilottan öğrendim böyle daha kolay oluyomuş
+                return scanner.nextInt();
+            } catch (InputMismatchException e) {
+                System.out.print("Hatalı giriş! Lütfen bir sayı girin: ");
+                scanner.nextLine(); // Hatalı girişleri temizle
+            }
+        }
+    }
+
+    public static double alinanNot(Scanner scanner) {
+        while (true) {
+            try {                                                       // burayı da
+                System.out.print("Not: ");
+                return scanner.nextDouble();
+            } catch (InputMismatchException e) {
+                System.out.println("Hatalı giriş! Lütfen geçerli bir sayı girin.");
+                scanner.nextLine(); // Hatalı girişleri temizlemek için
+            }
+        }
+    }
+}
