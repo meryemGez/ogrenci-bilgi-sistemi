@@ -1,0 +1,952 @@
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import java.io.*;
+import java.lang.reflect.Type;
+import java.util.*;
+
+// Kullanıcı sınıfı ve alt sınıfları
+class User {
+    protected String kullaniciKimligi;
+    protected String sifre;
+    protected String adSoyad;
+    protected String rutbe;
+
+    public User(String kullaniciID, String sifre, String ad, String rutbe) {
+        this.kullaniciKimligi = kullaniciID;
+        this.sifre = sifre;
+        this.adSoyad = ad;
+        this.rutbe = rutbe;
+    }
+
+    public String getKullaniciKimligi() {
+        return kullaniciKimligi;
+    }
+
+    public String getSifre() {
+        return sifre;
+    }
+
+    public String getAdSoyad() {
+        return adSoyad;
+    }
+
+    public String getRutbe() {
+        return rutbe;
+    }
+
+    @Override
+    public String toString() {
+        return adSoyad + " (" + rutbe + ")";
+    }
+}
+
+class Ogrenci extends User {
+    private Map<String, Double[]> notlar = new HashMap<>();
+
+    public Ogrenci(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogrenci");
+    }
+
+    public void addNot(String ders, Double vize, Double finalNotu) {
+        notlar.put(ders, new Double[]{vize, finalNotu});
+    }
+
+    public Map<String, Double[]> getNotlar() {
+        return notlar;
+    }
+
+    public double calculateAverage(String ders) {
+        if (notlar.containsKey(ders)) {
+            Double[] notlarDers = notlar.get(ders);
+            return (notlarDers[0] * 0.4) + (notlarDers[1] * 0.6);
+        }
+        return 0.0;
+    }
+}
+
+class Ogretmen extends User {
+    public Ogretmen(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogretmen");
+    }
+
+    public void notGir(Ogrenci ogrenci, String ders, Double vize, Double finalNotu) {
+        ogrenci.addNot(ders, vize, finalNotu);
+        System.out.println("Not başarıyla eklendi: " + ders);
+    }
+
+    public void duyuruEkle(List<Duyuru> duyurular, String mesaj) {
+        duyurular.add(new Duyuru(mesaj, this.adSoyad));
+        System.out.println("Duyuru başarıyla eklendi.");
+    }
+}
+
+class Duyuru {
+    private String mesaj;
+    private String gonderen;
+
+    public Duyuru(String mesaj, String gonderen) {
+        this.mesaj = mesaj;
+        this.gonderen = gonderen;
+    }
+
+    public String getMesaj() {
+        return mesaj;
+    }
+
+    public String getGonderen() {
+        return gonderen;
+    }
+
+    @Override
+    public String toString() {
+        return mesaj + " (Gönderen: " + gonderen + ")";
+    }
+}
+
+// User için TypeAdapter
+class UserAdapter implements JsonDeserializer<User>, JsonSerializer<User> {
+    @Override
+    public JsonElement serialize(User src, Type typeOfSrc, JsonSerializationContext context) {
+        JsonObject obj = context.serialize(src).getAsJsonObject();
+        obj.addProperty("type", src.getClass().getSimpleName());
+        return obj;
+    }
+
+    @Override
+    public User deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        JsonObject obj = json.getAsJsonObject();
+        String type = obj.get("type").getAsString();
+        try {
+            Class<?> clazz = "Ogrenci".equals(type) ? Ogrenci.class : Ogretmen.class;
+            return context.deserialize(json, clazz);
+        } catch (Exception e) {
+            throw new JsonParseException("Hatalı kullanıcı tipi", e);
+        }
+    }
+}
+
+// Main class
+public class StudentManagementSystem {
+    private static Map<String, User> userMap = new HashMap<>();
+    private static List<Duyuru> duyurular = new ArrayList<>();
+    private static final String FILE_NAME = "users.json";
+    private static final String ANNOUNCEMENTS_FILE = "announcements.json";
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(User.class, new UserAdapter())
+            .create();
+    private static Scanner scanner = new Scanner(System.in);
+
+    public static void main(String[] args) {
+        loadData();
+        userMap.put("admin1", new User("admin1", "admin123", "Admin Kullanıcı", "yonetici"));
+
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Sisteme Giriş Yap");
+            System.out.println("2. Çıkış");
+            System.out.print("Lütfen işleminizi seçin: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    loginUser();
+                    break;
+                case 2:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hata! Lütfen tekrar deneyin.");
+            }
+        }
+
+        saveData();
+    }
+
+    private static void loginUser() {
+        System.out.print("Kullanıcı kimliği: ");
+        String kullaniciID = scanner.nextLine();
+        System.out.print("Şifre: ");
+        String sifre = scanner.nextLine();
+
+        User user = userMap.get(kullaniciID);
+        if (user != null && user.getSifre().equals(sifre)) {
+            System.out.println("Hoşgeldiniz, " + user.getAdSoyad() + "!");
+            if (user instanceof Ogretmen) {
+                teacherMenu((Ogretmen) user);
+            } else if (user instanceof Ogrenci) {
+                studentMenu((Ogrenci) user);
+            } else {
+                System.out.println("Yetkisiz kullanıcı.");
+            }
+        } else {
+            System.out.println("Kimlik veya şifre hatalı!");
+        }
+    }
+
+    private static void teacherMenu(Ogretmen ogretmen) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Öğrenciye Not Ekle");
+            System.out.println("2. Duyuru Ekle");
+            System.out.println("3. Öğrencileri Listele");
+            System.out.println("4. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    addStudentGrade(ogretmen);
+                    break;
+                case 2:
+                    addAnnouncement(ogretmen);
+                    break;
+                case 3:
+                    listStudents();
+                    break;
+                case 4:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hatalı giriş!");
+            }
+        }
+    }
+
+    private static void addStudentGrade(Ogretmen ogretmen) {
+        System.out.print("Öğrenci Kimliği: ");
+        String ogrenciID = scanner.nextLine();
+        User user = userMap.get(ogrenciID);
+
+        if (user instanceof Ogrenci) {
+            Ogrenci ogrenci = (Ogrenci) user;
+            System.out.print("Ders: ");
+            String ders = scanner.nextLine();
+            System.out.print("Vize Notu: ");
+            double vize = Double.parseDouble(scanner.nextLine());
+            System.out.print("Final Notu: ");
+            double finalNotu = Double.parseDouble(scanner.nextLine());
+
+            ogretmen.notGir(ogrenci, ders, vize, finalNotu);
+        } else {
+            System.out.println("Öğrenci bulunamadı.");
+        }
+    }
+
+    private static void addAnnouncement(Ogretmen ogretmen) {
+        System.out.print("Duyuru Mesajı: ");
+        String mesaj = scanner.nextLine();
+        ogretmen.duyuruEkle(duyurular, mesaj);
+    }
+
+    private static void listStudents() {
+        System.out.println("Sistemdeki Öğrenciler:");
+        boolean found = false;
+
+        for (User user : userMap.values()) {
+            if (user instanceof Ogrenci) {
+                found = true;
+                Ogrenci ogrenci = (Ogrenci) user;
+                System.out.println("ID: " + ogrenci.getKullaniciKimligi() + ", İsim: " + ogrenci.getAdSoyad());
+            }
+        }
+
+        if (!found) {
+            System.out.println("Sistemde kayıtlı öğrenci bulunamadı.");
+        }
+    }
+
+    private static void studentMenu(Ogrenci ogrenci) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Notları Görüntüle");
+            System.out.println("2. Duyuruları Görüntüle");
+            System.out.println("3. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+           switch (choice) {
+            case 1:
+                addStudentGrade(ogretmen);
+                break;
+            case 2:
+                addAnnouncement(ogretmen);
+                break;
+            case 3:
+                listStudents();
+                break;
+            case 4:
+                exit = true;
+                break;
+            default:
+                System.out.println("Hatalı giriş!");
+        }
+    }
+}
+
+private static void listStudents() {
+    System.out.println("Sistemdeki Öğrenciler:");
+    boolean found = false;
+
+    for (User user : userMap.values()) {
+        if (user instanceof Ogrenci) {
+            found = true;
+            Ogrenci ogrenci = (Ogrenci) user;
+            System.out.println("ID: " + ogrenci.getKullaniciKimligi() + ", İsim: " + ogrenci.getAdSoyad());
+        }
+    }
+
+    if (!found) {
+        System.out.println("Sistemde kayıtlı öğrenci bulunamadı.");
+    }
+}
+Eklenen Özellikler:
+Öğretmen Menüsüne Yeni Seçenek: "3. Öğrencileri Listele" eklendi.
+listStudents Metodu: Sistemde kayıtlı tüm öğrencileri tarar ve Ogrenci tipinde olan kullanıcıların kimlik ve isimlerini listeler.
+Boş Liste Kontrolü: Eğer sistemde öğrenci bulunmuyorsa, uygun bir mesaj gösterilir.
+Çalışma Senaryosu:
+Öğretmen sisteme giriş yaptıktan sonra menüden "3. Öğrencileri Listele" seçeneğini seçer.
+Sistem, kayıtlı tüm öğrencileri kimlik ve isimleriyle birlikte ekrana yazdırır.
+Eğer başka bir geliştirme daha istersen, eklemeler yapmaktan memnuniyet duyarım! 😊
+
+
+
+
+
+
+
+Şunu dedin:
+şimdi kodu baştan aşağı son düzenlemeleriyle yaz bana
+ChatGPT:
+ChatGPT
+Tabii ki, öğrenci listeleme özelliği de dahil olmak üzere tüm düzeltmeleri içeren baştan sona düzenlenmiş kod aşağıdadır. Kod, polimorfizm, JSON serileştirme/deserileştirme, hata kontrolü ve öğretmen menüsünde öğrenci listeleme gibi özellikleri kapsar.
+
+Tüm Kod
+java
+Kodu kopyala
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import java.io.*;
+import java.lang.reflect.Type;
+import java.util.*;
+
+// Kullanıcı sınıfı ve alt sınıfları
+class User {
+    protected String kullaniciKimligi;
+    protected String sifre;
+    protected String adSoyad;
+    protected String rutbe;
+
+    public User(String kullaniciID, String sifre, String ad, String rutbe) {
+        this.kullaniciKimligi = kullaniciID;
+        this.sifre = sifre;
+        this.adSoyad = ad;
+        this.rutbe = rutbe;
+    }
+
+    public String getKullaniciKimligi() {
+        return kullaniciKimligi;
+    }
+
+    public String getSifre() {
+        return sifre;
+    }
+
+    public String getAdSoyad() {
+        return adSoyad;
+    }
+
+    public String getRutbe() {
+        return rutbe;
+    }
+
+    @Override
+    public String toString() {
+        return adSoyad + " (" + rutbe + ")";
+    }
+}
+
+class Ogrenci extends User {
+    private Map<String, Double[]> notlar = new HashMap<>();
+
+    public Ogrenci(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogrenci");
+    }
+
+    public void addNot(String ders, Double vize, Double finalNotu) {
+        notlar.put(ders, new Double[]{vize, finalNotu});
+    }
+
+    public Map<String, Double[]> getNotlar() {
+        return notlar;
+    }
+
+    public double calculateAverage(String ders) {
+        if (notlar.containsKey(ders)) {
+            Double[] notlarDers = notlar.get(ders);
+            return (notlarDers[0] * 0.4) + (notlarDers[1] * 0.6);
+        }
+        return 0.0;
+    }
+}
+
+class Ogretmen extends User {
+    public Ogretmen(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogretmen");
+    }
+
+    public void notGir(Ogrenci ogrenci, String ders, Double vize, Double finalNotu) {
+        ogrenci.addNot(ders, vize, finalNotu);
+        System.out.println("Not başarıyla eklendi: " + ders);
+    }
+
+    public void duyuruEkle(List<Duyuru> duyurular, String mesaj) {
+        duyurular.add(new Duyuru(mesaj, this.adSoyad));
+        System.out.println("Duyuru başarıyla eklendi.");
+    }
+}
+
+class Duyuru {
+    private String mesaj;
+    private String gonderen;
+
+    public Duyuru(String mesaj, String gonderen) {
+        this.mesaj = mesaj;
+        this.gonderen = gonderen;
+    }
+
+    public String getMesaj() {
+        return mesaj;
+    }
+
+    public String getGonderen() {
+        return gonderen;
+    }
+
+    @Override
+    public String toString() {
+        return mesaj + " (Gönderen: " + gonderen + ")";
+    }
+}
+
+// User için TypeAdapter
+class UserAdapter implements JsonDeserializer<User>, JsonSerializer<User> {
+    @Override
+    public JsonElement serialize(User src, Type typeOfSrc, JsonSerializationContext context) {
+        JsonObject obj = context.serialize(src).getAsJsonObject();
+        obj.addProperty("type", src.getClass().getSimpleName());
+        return obj;
+    }
+
+    @Override
+    public User deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        JsonObject obj = json.getAsJsonObject();
+        String type = obj.get("type").getAsString();
+        try {
+            Class<?> clazz = "Ogrenci".equals(type) ? Ogrenci.class : Ogretmen.class;
+            return context.deserialize(json, clazz);
+        } catch (Exception e) {
+            throw new JsonParseException("Hatalı kullanıcı tipi", e);
+        }
+    }
+}
+
+// Main class
+public class StudentManagementSystem {
+    private static Map<String, User> userMap = new HashMap<>();
+    private static List<Duyuru> duyurular = new ArrayList<>();
+    private static final String FILE_NAME = "users.json";
+    private static final String ANNOUNCEMENTS_FILE = "announcements.json";
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(User.class, new UserAdapter())
+            .create();
+    private static Scanner scanner = new Scanner(System.in);
+
+    public static void main(String[] args) {
+        loadData();
+        userMap.put("admin1", new User("admin1", "admin123", "Admin Kullanıcı", "yonetici"));
+
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Sisteme Giriş Yap");
+            System.out.println("2. Çıkış");
+            System.out.print("Lütfen işleminizi seçin: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    loginUser();
+                    break;
+                case 2:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hata! Lütfen tekrar deneyin.");
+            }
+        }
+
+        saveData();
+    }
+
+    private static void loginUser() {
+        System.out.print("Kullanıcı kimliği: ");
+        String kullaniciID = scanner.nextLine();
+        System.out.print("Şifre: ");
+        String sifre = scanner.nextLine();
+
+        User user = userMap.get(kullaniciID);
+        if (user != null && user.getSifre().equals(sifre)) {
+            System.out.println("Hoşgeldiniz, " + user.getAdSoyad() + "!");
+            if (user instanceof Ogretmen) {
+                teacherMenu((Ogretmen) user);
+            } else if (user instanceof Ogrenci) {
+                studentMenu((Ogrenci) user);
+            } else {
+                System.out.println("Yetkisiz kullanıcı.");
+            }
+        } else {
+            System.out.println("Kimlik veya şifre hatalı!");
+        }
+    }
+
+    private static void teacherMenu(Ogretmen ogretmen) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Öğrenciye Not Ekle");
+            System.out.println("2. Duyuru Ekle");
+            System.out.println("3. Öğrencileri Listele");
+            System.out.println("4. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    addStudentGrade(ogretmen);
+                    break;
+                case 2:
+                    addAnnouncement(ogretmen);
+                    break;
+                case 3:
+                    listStudents();
+                    break;
+                case 4:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hatalı giriş!");
+            }
+        }
+    }
+
+    private static void addStudentGrade(Ogretmen ogretmen) {
+        System.out.print("Öğrenci Kimliği: ");
+        String ogrenciID = scanner.nextLine();
+        User user = userMap.get(ogrenciID);
+
+        if (user instanceof Ogrenci) {
+            Ogrenci ogrenci = (Ogrenci) user;
+            System.out.print("Ders: ");
+            String ders = scanner.nextLine();
+            System.out.print("Vize Notu: ");
+            double vize = Double.parseDouble(scanner.nextLine());
+            System.out.print("Final Notu: ");
+            double finalNotu = Double.parseDouble(scanner.nextLine());
+
+            ogretmen.notGir(ogrenci, ders, vize, finalNotu);
+        } else {
+            System.out.println("Öğrenci bulunamadı.");
+        }
+    }
+
+    private static void addAnnouncement(Ogretmen ogretmen) {
+        System.out.print("Duyuru Mesajı: ");
+        String mesaj = scanner.nextLine();
+        ogretmen.duyuruEkle(duyurular, mesaj);
+    }
+
+    private static void listStudents() {
+        System.out.println("Sistemdeki Öğrenciler:");
+        boolean found = false;
+
+        for (User user : userMap.values()) {
+            if (user instanceof Ogrenci) {
+                found = true;
+                Ogrenci ogrenci = (Ogrenci) user;
+                System.out.println("ID: " + ogrenci.getKullaniciKimligi() + ", İsim: " + ogrenci.getAdSoyad());
+            }
+        }
+
+        if (!found) {
+            System.out.println("Sistemde kayıtlı öğrenci bulunamadı.");
+        }
+    }
+
+    private static void studentMenu(Ogrenci ogrenci) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Notları Görüntüle");
+            System.out.println("2. Duyuruları Görüntüle");
+            System.out.println("3. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+           switch (choice) {
+            case 1:
+                addStudentGrade(ogretmen);
+                break;
+            case 2:
+                addAnnouncement(ogretmen);
+                break;
+            case 3:
+                listStudents();
+                break;
+            case 4:
+                exit = true;
+                break;
+            default:
+                System.out.println("Hatalı giriş!");
+        }
+    }
+}
+
+private static void listStudents() {
+    System.out.println("Sistemdeki Öğrenciler:");
+    boolean found = false;
+
+    for (User user : userMap.values()) {
+        if (user instanceof Ogrenci) {
+            found = true;
+            Ogrenci ogrenci = (Ogrenci) user;
+            System.out.println("ID: " + ogrenci.getKullaniciKimligi() + ", İsim: " + ogrenci.getAdSoyad());
+        }
+    }
+
+    if (!found) {
+        System.out.println("Sistemde kayıtlı öğrenci bulunamadı.");
+    }
+}
+Eklenen Özellikler:
+Öğretmen Menüsüne Yeni Seçenek: "3. Öğrencileri Listele" eklendi.
+listStudents Metodu: Sistemde kayıtlı tüm öğrencileri tarar ve Ogrenci tipinde olan kullanıcıların kimlik ve isimlerini listeler.
+Boş Liste Kontrolü: Eğer sistemde öğrenci bulunmuyorsa, uygun bir mesaj gösterilir.
+Çalışma Senaryosu:
+Öğretmen sisteme giriş yaptıktan sonra menüden "3. Öğrencileri Listele" seçeneğini seçer.
+Sistem, kayıtlı tüm öğrencileri kimlik ve isimleriyle birlikte ekrana yazdırır.
+Eğer başka bir geliştirme daha istersen, eklemeler yapmaktan memnuniyet duyarım! 😊
+
+
+
+
+
+
+
+Şunu dedin:
+şimdi kodu baştan aşağı son düzenlemeleriyle yaz bana
+ChatGPT:
+ChatGPT
+Tabii ki, öğrenci listeleme özelliği de dahil olmak üzere tüm düzeltmeleri içeren baştan sona düzenlenmiş kod aşağıdadır. Kod, polimorfizm, JSON serileştirme/deserileştirme, hata kontrolü ve öğretmen menüsünde öğrenci listeleme gibi özellikleri kapsar.
+
+Tüm Kod
+java
+Kodu kopyala
+import com.google.gson.*;
+import com.google.gson.reflect.TypeToken;
+import java.io.*;
+import java.lang.reflect.Type;
+import java.util.*;
+
+// Kullanıcı sınıfı ve alt sınıfları
+class User {
+    protected String kullaniciKimligi;
+    protected String sifre;
+    protected String adSoyad;
+    protected String rutbe;
+
+    public User(String kullaniciID, String sifre, String ad, String rutbe) {
+        this.kullaniciKimligi = kullaniciID;
+        this.sifre = sifre;
+        this.adSoyad = ad;
+        this.rutbe = rutbe;
+    }
+
+    public String getKullaniciKimligi() {
+        return kullaniciKimligi;
+    }
+
+    public String getSifre() {
+        return sifre;
+    }
+
+    public String getAdSoyad() {
+        return adSoyad;
+    }
+
+    public String getRutbe() {
+        return rutbe;
+    }
+
+    @Override
+    public String toString() {
+        return adSoyad + " (" + rutbe + ")";
+    }
+}
+
+class Ogrenci extends User {
+    private Map<String, Double[]> notlar = new HashMap<>();
+
+    public Ogrenci(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogrenci");
+    }
+
+    public void addNot(String ders, Double vize, Double finalNotu) {
+        notlar.put(ders, new Double[]{vize, finalNotu});
+    }
+
+    public Map<String, Double[]> getNotlar() {
+        return notlar;
+    }
+
+    public double calculateAverage(String ders) {
+        if (notlar.containsKey(ders)) {
+            Double[] notlarDers = notlar.get(ders);
+            return (notlarDers[0] * 0.4) + (notlarDers[1] * 0.6);
+        }
+        return 0.0;
+    }
+}
+
+class Ogretmen extends User {
+    public Ogretmen(String kullaniciID, String sifre, String ad) {
+        super(kullaniciID, sifre, ad, "ogretmen");
+    }
+
+    public void notGir(Ogrenci ogrenci, String ders, Double vize, Double finalNotu) {
+        ogrenci.addNot(ders, vize, finalNotu);
+        System.out.println("Not başarıyla eklendi: " + ders);
+    }
+
+    public void duyuruEkle(List<Duyuru> duyurular, String mesaj) {
+        duyurular.add(new Duyuru(mesaj, this.adSoyad));
+        System.out.println("Duyuru başarıyla eklendi.");
+    }
+}
+
+class Duyuru {
+    private String mesaj;
+    private String gonderen;
+
+    public Duyuru(String mesaj, String gonderen) {
+        this.mesaj = mesaj;
+        this.gonderen = gonderen;
+    }
+
+    public String getMesaj() {
+        return mesaj;
+    }
+
+    public String getGonderen() {
+        return gonderen;
+    }
+
+    @Override
+    public String toString() {
+        return mesaj + " (Gönderen: " + gonderen + ")";
+    }
+}
+
+// User için TypeAdapter
+class UserAdapter implements JsonDeserializer<User>, JsonSerializer<User> {
+    @Override
+    public JsonElement serialize(User src, Type typeOfSrc, JsonSerializationContext context) {
+        JsonObject obj = context.serialize(src).getAsJsonObject();
+        obj.addProperty("type", src.getClass().getSimpleName());
+        return obj;
+    }
+
+    @Override
+    public User deserialize(JsonElement json, Type typeOfT, JsonDeserializationContext context) throws JsonParseException {
+        JsonObject obj = json.getAsJsonObject();
+        String type = obj.get("type").getAsString();
+        try {
+            Class<?> clazz = "Ogrenci".equals(type) ? Ogrenci.class : Ogretmen.class;
+            return context.deserialize(json, clazz);
+        } catch (Exception e) {
+            throw new JsonParseException("Hatalı kullanıcı tipi", e);
+        }
+    }
+}
+
+// Main class
+public class StudentManagementSystem {
+    private static Map<String, User> userMap = new HashMap<>();
+    private static List<Duyuru> duyurular = new ArrayList<>();
+    private static final String FILE_NAME = "users.json";
+    private static final String ANNOUNCEMENTS_FILE = "announcements.json";
+    private static final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(User.class, new UserAdapter())
+            .create();
+    private static Scanner scanner = new Scanner(System.in);
+
+    public static void main(String[] args) {
+        loadData();
+        userMap.put("admin1", new User("admin1", "admin123", "Admin Kullanıcı", "yonetici"));
+
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Sisteme Giriş Yap");
+            System.out.println("2. Çıkış");
+            System.out.print("Lütfen işleminizi seçin: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    loginUser();
+                    break;
+                case 2:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hata! Lütfen tekrar deneyin.");
+            }
+        }
+
+        saveData();
+    }
+
+    private static void loginUser() {
+        System.out.print("Kullanıcı kimliği: ");
+        String kullaniciID = scanner.nextLine();
+        System.out.print("Şifre: ");
+        String sifre = scanner.nextLine();
+
+        User user = userMap.get(kullaniciID);
+        if (user != null && user.getSifre().equals(sifre)) {
+            System.out.println("Hoşgeldiniz, " + user.getAdSoyad() + "!");
+            if (user instanceof Ogretmen) {
+                teacherMenu((Ogretmen) user);
+            } else if (user instanceof Ogrenci) {
+                studentMenu((Ogrenci) user);
+            } else {
+                System.out.println("Yetkisiz kullanıcı.");
+            }
+        } else {
+            System.out.println("Kimlik veya şifre hatalı!");
+        }
+    }
+
+    private static void teacherMenu(Ogretmen ogretmen) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Öğrenciye Not Ekle");
+            System.out.println("2. Duyuru Ekle");
+            System.out.println("3. Öğrencileri Listele");
+            System.out.println("4. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    addStudentGrade(ogretmen);
+                    break;
+                case 2:
+                    addAnnouncement(ogretmen);
+                    break;
+                case 3:
+                    listStudents();
+                    break;
+                case 4:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hatalı giriş!");
+            }
+        }
+    }
+
+    private static void addStudentGrade(Ogretmen ogretmen) {
+        System.out.print("Öğrenci Kimliği: ");
+        String ogrenciID = scanner.nextLine();
+        User user = userMap.get(ogrenciID);
+
+        if (user instanceof Ogrenci) {
+            Ogrenci ogrenci = (Ogrenci) user;
+            System.out.print("Ders: ");
+            String ders = scanner.nextLine();
+            System.out.print("Vize Notu: ");
+            double vize = Double.parseDouble(scanner.nextLine());
+            System.out.print("Final Notu: ");
+            double finalNotu = Double.parseDouble(scanner.nextLine());
+
+            ogretmen.notGir(ogrenci, ders, vize, finalNotu);
+        } else {
+            System.out.println("Öğrenci bulunamadı.");
+        }
+    }
+
+    private static void addAnnouncement(Ogretmen ogretmen) {
+        System.out.print("Duyuru Mesajı: ");
+        String mesaj = scanner.nextLine();
+        ogretmen.duyuruEkle(duyurular, mesaj);
+    }
+
+    private static void listStudents() {
+        System.out.println("Sistemdeki Öğrenciler:");
+        boolean found = false;
+
+        for (User user : userMap.values()) {
+            if (user instanceof Ogrenci) {
+                found = true;
+                Ogrenci ogrenci = (Ogrenci) user;
+                System.out.println("ID: " + ogrenci.getKullaniciKimligi() + ", İsim: " + ogrenci.getAdSoyad());
+            }
+        }
+
+        if (!found) {
+            System.out.println("Sistemde kayıtlı öğrenci bulunamadı.");
+        }
+    }
+
+    private static void studentMenu(Ogrenci ogrenci) {
+        boolean exit = false;
+        while (!exit) {
+            System.out.println("1. Notları Görüntüle");
+            System.out.println("2. Duyuruları Görüntüle");
+            System.out.println("3. Çıkış");
+            System.out.print("Seçiminiz: ");
+            int choice = Integer.parseInt(scanner.nextLine());
+
+            switch (choice) {
+                case 1:
+                    viewGrades(ogrenci);
+                    break;
+                case 2:
+                    viewAnnouncements();
+                    break;
+                case 3:
+                    exit = true;
+                    break;
+                default:
+                    System.out.println("Hatalı giriş!");
+            }
+        }
+    }
+
+    private static void viewGrades(Ogrenci ogrenci) {
+        System.out.println("Notlarınız:");
+        for (Map.Entry<String, Double[]> entry : ogrenci.getNotlar().entrySet()) {
+            String ders = entry.getKey();
+            Double[] notlar = entry.getValue();
+            System.out.println(ders + ": Vize - " + notlar[0] + ", Final - " + notlar[1] +
+                    ", Ortalama - " + ogrenci.calculateAverage(ders));
+        }
+    }
+
+    private static void viewAnnouncements()
+                
+
+
+
+
+
+
+
+
